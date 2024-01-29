@@ -1,0 +1,16 @@
+{
+  "name": "kratz",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot scripts/serve.ts",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@types/bun": "^1.0.4",
+    "prettier": "^3.2.4"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
