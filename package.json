@@ -3,6 +3,7 @@
   "module": "index.ts",
   "type": "module",
   "scripts": {
+    "build": "bun scripts/build.ts",
     "dev": "bun --hot scripts/serve.ts",
     "format": "prettier --write ."
   },

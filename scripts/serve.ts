@@ -1,11 +1,8 @@
+import { config as buildConfig } from "./build";
+
 const port = process.env.PORT || 3000;
 
-const transpiler = new Bun.Transpiler();
-
-async function serveTS(filename: string): Promise<Response> {
-  const source = await Bun.file(filename).text();
-  return new Response(await transpiler.transform(source));
-}
+async function serveTS(filename: string): Promise<Response> {}
 
 try {
   Bun.serve({
@@ -14,8 +11,9 @@ try {
       switch (url.pathname) {
         case "/":
           return new Response(Bun.file("demo/index.html"));
-        case "/app.ts":
-          return serveTS("demo/app.ts");
+        case "/bundle":
+          const build = await Bun.build(buildConfig);
+          return new Response(build.outputs[0]);
         default:
           return new Response("404!", { status: 404 });
       }
