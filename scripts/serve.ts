@@ -1,8 +1,6 @@
-import { config as buildConfig } from "./build";
+import { demoConfig } from "./build";
 
 const port = process.env.PORT || 3000;
-
-async function serveTS(filename: string): Promise<Response> {}
 
 try {
   Bun.serve({
@@ -12,10 +10,13 @@ try {
         case "/":
           return new Response(Bun.file("demo/index.html"));
         case "/bundle":
-          const build = await Bun.build(buildConfig);
+          const build = await Bun.build(demoConfig);
           return new Response(build.outputs[0]);
         default:
-          return new Response("404!", { status: 404 });
+          const f = Bun.file("demo" + url.pathname);
+          return (await f.exists())
+            ? new Response(f)
+            : new Response("404!", { status: 404 });
       }
     },
     port,
