@@ -13,7 +13,39 @@ interface Position {
   y: number;
 }
 
-interface Script {}
+type WaitCond = void;
+
+type KGenerator = Generator<WaitCond, void, void>;
+
+type ScriptBody = (this: Sprite) => void | KGenerator;
+
+class Script {
+  ready = false;
+  gen?: KGenerator;
+
+  constructor(public body: ScriptBody) {}
+
+  run(sprite: Sprite) {
+    if (this.gen) {
+      this.continue();
+    }
+    const r = this.body.apply(sprite);
+    if (r && "next" in r) {
+      this.gen = r;
+      this.continue();
+    }
+    this.ready = false;
+  }
+
+  continue() {
+    const { value, done } = checkNotNull(this.gen).next();
+    if (done) {
+      this.gen = undefined;
+    }
+    // TODO: Handle value, which says what it's waiting on.
+    return;
+  }
+}
 
 async function loadImage(url: string): Promise<ImageBitmap> {
   const res = await fetch(url);
@@ -31,18 +63,22 @@ class Costume {
 export class Stage {
   view: HTMLCanvasElement;
   sprites = new Map<string, Sprite>();
-  nextSpriteId = 1;
+  ticking = false;
+
+  _nextSpriteId = 1;
+  _canvasCtx: CanvasRenderingContext2D;
 
   constructor(canvas?: HTMLCanvasElement) {
     this.view = canvas || document.createElement("canvas");
     this.view.width = WIDTH;
     this.view.height = HEIGHT;
     this.view.style.border = "1px solid #aaa";
+    this._canvasCtx = checkNotNull(this.view.getContext("2d"));
   }
 
   async addSprite(url: string, name?: string): Promise<Sprite> {
     const sprite = new Sprite(this);
-    const k = name || `sprite${this.nextSpriteId++}`;
+    const k = name || `sprite${this._nextSpriteId++}`;
     this.sprites.set(k, sprite);
     await sprite.addCostume(url);
     return sprite;
@@ -53,23 +89,38 @@ export class Stage {
   }
 
   startRendering() {
-    const ctx = checkNotNull(this.view.getContext("2d"));
-    // ctx.scale(1 / window.devicePixelRatio, 1 / window.devicePixelRatio);
-    requestAnimationFrame(() => this.render(ctx));
+    this.ticking = true;
+    const self = this;
+    (function doTick() {
+      self.tick();
+      if (self.ticking) requestAnimationFrame(doTick);
+    })();
   }
 
-  render(ctx: CanvasRenderingContext2D) {
+  tick() {
+    // ctx.scale(1 / window.devicePixelRatio, 1 / window.devicePixelRatio);
+    for (const sprite of this.sprites.values()) {
+      sprite.scripts.forEach((s) => {
+        if (s.ready) {
+          s.run(sprite);
+        }
+      });
+    }
+
+    this._draw(this._canvasCtx);
+  }
+
+  _draw(ctx: CanvasRenderingContext2D) {
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
     ctx.save();
     ctx.translate(WIDTH / 2, HEIGHT / 2);
     for (const sprite of this.sprites.values()) {
       ctx.save();
       ctx.translate(-WIDTH / 2, -HEIGHT / 2);
-      sprite.render(ctx);
+      sprite.draw(ctx);
       ctx.restore();
     }
     ctx.restore();
-    requestAnimationFrame(() => this.render(ctx));
   }
 }
 
@@ -118,9 +169,7 @@ export class Sprite {
     return this.costumes.find((c) => c.name === name);
   }
 
-  render(ctx: CanvasRenderingContext2D) {
-    const hw = this.costumes[0].bitmap.width / 2;
-    const hh = this.costumes[0].bitmap.height / 2;
+  draw(ctx: CanvasRenderingContext2D) {
     ctx.drawImage(this.costumes[0].bitmap, this.x, this.y);
   }
 
@@ -142,11 +191,13 @@ export class Sprite {
 
   // Events
 
-  whenKeyPressed(key: string, callback: (sprite: Sprite) => void) {
-    // TODO: Should this actually be throttled by frame?
+  whenKeyPressed(key: string, callback: ScriptBody) {
+    const script = new Script(callback);
+    this.scripts.add(script);
+
     window.addEventListener("keypress", (e: KeyboardEvent) => {
       if (e.code.toLowerCase() === key) {
-        callback(this);
+        script.ready = true;
       }
     });
   }
