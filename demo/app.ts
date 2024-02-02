@@ -7,4 +7,5 @@ cat.whenKeyPressed("space", (self: kratz.Sprite) => {
   self.move(10);
 });
 
-console.log("ok");
+document.body.appendChild(stage.view);
+stage.startRendering();

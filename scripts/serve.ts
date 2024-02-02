@@ -5,13 +5,17 @@ const port = process.env.PORT || 3000;
 try {
   Bun.serve({
     async fetch(req: Request): Promise<Response> {
+      let resStart = performance.now();
       const url = new URL(req.url);
       switch (url.pathname) {
         case "/":
           return new Response(Bun.file("demo/index.html"));
         case "/bundle":
+          const startTime = performance.now();
           const build = await Bun.build(demoConfig);
-          return new Response(build.outputs[0]);
+          const res = new Response(build.outputs[0]);
+          console.log(`Built in ${performance.now() - startTime}ms`);
+          return res;
         default:
           const f = Bun.file("demo" + url.pathname);
           return (await f.exists())
