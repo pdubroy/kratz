@@ -17,32 +17,35 @@ type WaitCond = void;
 
 type KGenerator = Generator<WaitCond, void, void>;
 
-type ScriptBody = (this: Sprite) => void | KGenerator;
+// type ScriptBody = (this: Sprite) => void | KGenerator;
+type ScriptBody = (this: Sprite) => KGenerator;
 
 class Script {
   ready = false;
-  gen?: KGenerator;
+
+  private _gen?: KGenerator;
 
   constructor(public body: ScriptBody) {}
 
   run(sprite: Sprite) {
-    if (this.gen) {
-      this.continue();
+    if (!this._gen) {
+      this._gen = this.body.apply(sprite);
     }
-    const r = this.body.apply(sprite);
-    if (r && "next" in r) {
-      this.gen = r;
-      this.continue();
-    }
-    this.ready = false;
+    this.continue();
   }
 
-  continue() {
-    const { value, done } = checkNotNull(this.gen).next();
+  // Pump the generator, i.e. run until it yields or completes.
+  private continue() {
+    const { done } = checkNotNull(this._gen).next();
     if (done) {
-      this.gen = undefined;
+      this._gen = undefined;
+      this.ready = false;
+    } else {
+      // A yield means that the end of a loop was reached.
+      // The script is still ready, but may or may not be scheduled to run
+      // again immediately.
+      this.ready = true;
     }
-    // TODO: Handle value, which says what it's waiting on.
     return;
   }
 }
@@ -64,9 +67,12 @@ export class Stage {
   view: HTMLCanvasElement;
   sprites = new Map<string, Sprite>();
   ticking = false;
+  needsRedraw = false;
 
   _nextSpriteId = 1;
   _canvasCtx: CanvasRenderingContext2D;
+
+  _tickCount = 0;
 
   constructor(canvas?: HTMLCanvasElement) {
     this.view = canvas || document.createElement("canvas");
@@ -91,20 +97,27 @@ export class Stage {
   startRendering() {
     this.ticking = true;
     const self = this;
-    (function doTick() {
+    function doTick() {
       self.tick();
       if (self.ticking) requestAnimationFrame(doTick);
-    })();
+    }
+    requestAnimationFrame(doTick);
   }
 
   tick() {
-    // ctx.scale(1 / window.devicePixelRatio, 1 / window.devicePixelRatio);
-    for (const sprite of this.sprites.values()) {
-      sprite.scripts.forEach((s) => {
-        if (s.ready) {
-          s.run(sprite);
-        }
-      });
+    this._tickCount += 1;
+    this.needsRedraw = false;
+
+    // Does the sprite have any scripts that are ready?
+    const anyScriptReady = (sprite: Sprite) =>
+      [...sprite.scripts.values()].some((s: Script) => s.ready);
+
+    while (!this.needsRedraw) {
+      for (const sprite of this.sprites.values()) {
+        sprite.runScripts();
+      }
+      // If no scripts are ready, we're done.
+      if (![...this.sprites.values()].some(anyScriptReady)) break;
     }
 
     this._draw(this._canvasCtx);
@@ -127,9 +140,21 @@ export class Stage {
 export class Sprite {
   costumes: Costume[] = [];
   scripts = new Set<Script>();
-  x = 0;
-  y = 0;
-  direction = 90;
+
+  private _pos = { x: 0, y: 0 };
+  private _direction = 90;
+
+  get x() {
+    return this._pos.x;
+  }
+
+  get y() {
+    return this._pos.y;
+  }
+
+  get direction() {
+    return this._direction;
+  }
 
   private nextCostumeId = 1;
   private canvas: HTMLCanvasElement;
@@ -141,6 +166,12 @@ export class Sprite {
     this.canvas.width = WIDTH;
     this.canvas.height = HEIGHT;
     this.canvasCtx = checkNotNull(this.canvas.getContext("2d"));
+  }
+
+  runScripts() {
+    for (const script of this.scripts) {
+      if (script.ready) script.run(this);
+    }
   }
 
   async _resizeBitmap(
@@ -176,7 +207,7 @@ export class Sprite {
   // Movement
 
   move(steps: number) {
-    this.x += steps;
+    this.changeXBy(steps);
   }
 
   turnClockwise(degrees: number) {}
@@ -189,6 +220,29 @@ export class Sprite {
 
   glideToXY(secs: number, x: number, y: number) {}
 
+  pointInDirection(degrees: number) {
+    this._direction = degrees;
+    this.stage.needsRedraw = true;
+  }
+
+  setX(val: number) {
+    this._pos.x = val;
+    this.stage.needsRedraw = true;
+  }
+
+  setY(val: number) {
+    this._pos.y = val;
+    this.stage.needsRedraw = true;
+  }
+
+  changeXBy(val: number) {
+    this.setX(this.x + val);
+  }
+
+  changeYBy(val: number) {
+    this.setY(this.y + val);
+  }
+
   // Events
 
   whenKeyPressed(key: string, callback: ScriptBody) {
@@ -200,6 +254,16 @@ export class Sprite {
         script.ready = true;
       }
     });
+  }
+
+  // Control
+
+  *repeat(times: number, callback: ScriptBody) {
+    for (let i = 0; i < times; i++) {
+      console.log("i", i);
+      yield* callback.apply(this);
+      yield; // Yield again upon callback completion.
+    }
   }
 }
 
