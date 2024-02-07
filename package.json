@@ -8,7 +8,9 @@
     "format": "prettier --write ."
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^13.3.8",
     "@types/bun": "^1.0.4",
+    "happy-dom": "^13.3.8",
     "prettier": "^3.2.4"
   },
   "peerDependencies": {
