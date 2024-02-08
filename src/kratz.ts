@@ -4,8 +4,6 @@ const WIDTH = 480;
 const HEIGHT = 360;
 
 interface DOMHelpers {
-  // Full signature:
-  // createImageBitmap(image: ImageBitmapSource, options?: ImageBitmapOptions): Promise<ImageBitmap>;
   createImageBitmap(source: HTMLCanvasElement): Promise<ImageBitmap>;
   getCanvasContext(canvas: HTMLCanvasElement): RenderingContext;
   loadImage(url: string): Promise<ImageBitmap>;
@@ -90,9 +88,12 @@ export class Stage {
     this.view.height = HEIGHT;
     this.view.style.border = "1px solid #aaa";
     this._dom = _domHelpersForTesting ?? {
-      createImageBitmap,
-      getCanvasContext: (canvas: HTMLCanvasElement) =>
-        checkNotNull(canvas.getContext("2d")),
+      createImageBitmap(source: ImageBitmapSource) {
+        return createImageBitmap(source);
+      },
+      getCanvasContext(canvas: HTMLCanvasElement) {
+        return checkNotNull(canvas.getContext("2d"));
+      },
       async loadImage(url: string) {
         const res = await fetch(url);
         const blob = await res.blob();
@@ -221,7 +222,7 @@ export class Sprite {
   }
 
   draw(ctx: RenderingContext) {
-    ctx.drawImage(this.costumes[0].bitmap, this.x, this.y, 0, 0);
+    ctx.drawImage(this.costumes[0].bitmap, this.x, this.y);
   }
 
   // Movement
