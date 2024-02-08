@@ -26,9 +26,8 @@ interface Position {
   y: number;
 }
 
-type WaitCond = void;
-
-type KGenerator = Generator<WaitCond, void, void>;
+type YieldReason = "wait" | "endofloop";
+type KGenerator = Generator<YieldReason, void, void>;
 
 // type ScriptBody = (this: Sprite) => void | KGenerator;
 type ScriptBody = (this: Sprite) => KGenerator;
@@ -44,22 +43,17 @@ class Script {
     if (!this._gen) {
       this._gen = this.body.apply(sprite);
     }
-    this.continue();
+    return this.continue();
   }
 
   // Pump the generator, i.e. run until it yields or completes.
   private continue() {
-    const { done } = checkNotNull(this._gen).next();
+    this.ready = false;
+    const { done, value: yieldReason } = checkNotNull(this._gen).next();
     if (done) {
       this._gen = undefined;
-      this.ready = false;
-    } else {
-      // A yield means that the end of a loop was reached.
-      // The script is still ready, but may or may not be scheduled to run
-      // again immediately.
-      this.ready = true;
     }
-    return;
+    return yieldReason;
   }
 }
 
@@ -133,13 +127,25 @@ export class Stage {
     const anyScriptReady = (sprite: Sprite) =>
       [...sprite.scripts.values()].some((s: Script) => s.ready);
 
+    const waiting: Script[] = [];
+
     while (!this.needsRedraw) {
       for (const sprite of this.sprites.values()) {
-        sprite.runScripts();
+        sprite.runScripts().forEach((yieldReason, script) => {
+          if (yieldReason === "endofloop") {
+            script.ready = true;
+          } else if (yieldReason === "wait") {
+            waiting.push(script);
+          }
+        });
       }
       // If no scripts are ready, we're done.
       if (![...this.sprites.values()].some(anyScriptReady)) break;
     }
+    // Scripts that yield "wait" are always ready the next frame.
+    waiting.forEach((script) => {
+      script.ready = true;
+    });
 
     this._draw(this._canvasCtx);
   }
@@ -190,9 +196,14 @@ export class Sprite {
   }
 
   runScripts() {
+    const yieldReasons = new Map<Script, YieldReason | void>();
     for (const script of this.scripts) {
-      if (script.ready) script.run(this);
+      if (script.ready) {
+        const reason = script.run(this);
+        yieldReasons.set(script, reason);
+      }
     }
+    return yieldReasons;
   }
 
   async _resizeBitmap(
@@ -273,16 +284,25 @@ export class Sprite {
     window.addEventListener("keypress", (e: KeyboardEvent) => {
       if (e.code.toLowerCase() === key) {
         script.ready = true;
+        e.preventDefault();
       }
     });
   }
 
   // Control
 
-  *repeat(times: number, callback: ScriptBody) {
+  *wait(secs: number): KGenerator {
+    // Note: the wait duration is always rounded up to the next tick.
+    const start = performance.now();
+    while (performance.now() - start < secs * 1000) {
+      yield "wait";
+    }
+  }
+
+  *repeat(times: number, callback: ScriptBody): KGenerator {
     for (let i = 0; i < times; i++) {
       yield* callback.apply(this);
-      yield; // Yield again upon callback completion.
+      yield "endofloop";
     }
   }
 }
