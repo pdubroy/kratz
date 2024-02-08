@@ -1,34 +1,27 @@
+import { checkNotNull } from "./assert";
+
 const WIDTH = 480;
 const HEIGHT = 360;
 
-interface DOMTestHelpers {
+interface DOMHelpers {
   // Full signature:
   // createImageBitmap(image: ImageBitmapSource, options?: ImageBitmapOptions): Promise<ImageBitmap>;
   createImageBitmap(source: HTMLCanvasElement): Promise<ImageBitmap>;
-  getCanvasContext(): RenderingContext;
+  getCanvasContext(canvas: HTMLCanvasElement): RenderingContext;
   loadImage(url: string): Promise<ImageBitmap>;
 }
 
-interface RenderingContext {
-  // interface CanvasDrawImage
-  drawImage(
-    image: CanvasImageSource,
-    dx: number,
-    dy: number,
-    dw: number,
-    dh: number,
-  ): void;
+// Captures the subset of the CanvasRenderingContext2D interface that we use.
+// This allows us to fake easily fake a subset of the methods in test.
+type RenderingContext = Pick<
+  CanvasRenderingContext2D,
+  "drawImage" | "clearRect" | "save" | "translate" | "restore"
+>;
 
-  // interface CanvasRect
-  clearRect(x: number, y: number, w: number, h: number): void;
-
-  // interface CanvasState
-  restore(): void;
-  save(): void;
-
-  // interface CanvasTransform {
-  translate(x: number, y: number): void;
-}
+export type {
+  DOMHelpers as DOMHelpersForTesting,
+  RenderingContext as RenderingContextForTesting,
+};
 
 interface Position {
   x: number;
@@ -41,13 +34,6 @@ type KGenerator = Generator<WaitCond, void, void>;
 
 // type ScriptBody = (this: Sprite) => void | KGenerator;
 type ScriptBody = (this: Sprite) => KGenerator;
-
-function checkNotNull<T>(x: T): NonNullable<T> {
-  if (x == null) {
-    throw new Error(`expected non-null: ${x}`);
-  }
-  return x as NonNullable<T>;
-}
 
 class Script {
   ready = false;
@@ -96,38 +82,24 @@ export class Stage {
   _canvasCtx: RenderingContext;
 
   _tickCount = 0;
+  _dom: DOMHelpers;
 
-  constructor(
-    canvas?: HTMLCanvasElement,
-    private _domHelpersForTesting?: DOMTestHelpers,
-  ) {
+  constructor(canvas?: HTMLCanvasElement, _domHelpersForTesting?: DOMHelpers) {
     this.view = canvas ?? document.createElement("canvas");
     this.view.width = WIDTH;
     this.view.height = HEIGHT;
     this.view.style.border = "1px solid #aaa";
-    this._canvasCtx = this._getCanvasContext(this.view);
-  }
-
-  _createImageBitmap(source: HTMLCanvasElement): Promise<ImageBitmap> {
-    return this._domHelpersForTesting
-      ? this._domHelpersForTesting.createImageBitmap(source)
-      : createImageBitmap(source);
-  }
-
-  _getCanvasContext(canvas: HTMLCanvasElement): RenderingContext {
-    const ctx = this._domHelpersForTesting
-      ? this._domHelpersForTesting.getCanvasContext()
-      : canvas.getContext("2d");
-    return checkNotNull(ctx);
-  }
-
-  async _loadImage(url: string): Promise<ImageBitmap> {
-    if (this._domHelpersForTesting) {
-      return this._domHelpersForTesting.loadImage(url);
-    }
-    const res = await fetch(url);
-    const blob = await res.blob();
-    return createImageBitmap(blob);
+    this._dom = _domHelpersForTesting ?? {
+      createImageBitmap,
+      getCanvasContext: (canvas: HTMLCanvasElement) =>
+        checkNotNull(canvas.getContext("2d")),
+      async loadImage(url: string) {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        return createImageBitmap(blob);
+      },
+    };
+    this._canvasCtx = this._dom.getCanvasContext(this.view);
   }
 
   async addSprite(url: string, name?: string): Promise<Sprite> {
@@ -213,7 +185,7 @@ export class Sprite {
     this.canvas = document.createElement("canvas");
     this.canvas.width = WIDTH;
     this.canvas.height = HEIGHT;
-    this.canvasCtx = stage._getCanvasContext(this.canvas);
+    this.canvasCtx = stage._dom.getCanvasContext(this.canvas);
   }
 
   runScripts() {
@@ -230,12 +202,12 @@ export class Sprite {
     const x = (width - bitmap.width) / 2;
     const y = (height - bitmap.height) / 2;
     this.canvasCtx.drawImage(bitmap, x, y, width, height);
-    return this.stage._createImageBitmap(this.canvas);
+    return this.stage._dom.createImageBitmap(this.canvas);
   }
 
   async addCostume(url: string): Promise<Costume> {
     const name = `costume${this.nextCostumeId++}`;
-    const origBitmap = await this.stage._loadImage(url);
+    const origBitmap = await this.stage._dom.loadImage(url);
     const costume = new Costume(
       name,
       await this._resizeBitmap(origBitmap, WIDTH, HEIGHT),

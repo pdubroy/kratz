@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "bun scripts/build.ts",
+    "check": "bunx tsc",
     "dev": "bun --hot scripts/serve.ts",
     "format": "prettier --write ."
   },
