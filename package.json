@@ -1,8 +1,10 @@
 {
   "name": "kratz",
   "version": 0.1,
-  "module": "index.ts",
+  "author": "Patrick Dubroy <pdubroy@gmail.com>",
+  "module": "dist/index.js",
   "type": "module",
+  "files": ["dist", "src"],
   "scripts": {
     "build": "bun scripts/build.ts",
     "check": "bunx tsc",
