@@ -9,7 +9,8 @@
     "build": "bun scripts/build.ts",
     "check": "bunx tsc",
     "dev": "bun --hot scripts/serve.ts",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "prepublishOnly": ["bun build && bun test && bun run check"]
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^13.3.8",
