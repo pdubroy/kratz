@@ -5,7 +5,7 @@ const { Stage } = kratz;
 const stage = new Stage();
 const cat = await stage.addSprite("cat.png");
 
-cat.whenKeyPressed("Space", function* () {
+cat.whenKeyPressed("ArrowUp", function* () {
   yield* this.repeat(5, function* () {
     this.changeYBy(20);
   });
