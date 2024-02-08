@@ -13,7 +13,7 @@ test("repeat", async () => {
   const { stage, sprite } = await getStageAndSprite();
   const firstTick = stage._tickCount;
   let elapsedTicks = 0;
-  sprite.whenKeyPressed("space", function* () {
+  sprite.whenKeyPressed("Space", function* () {
     this.move(10);
     yield* this.repeat(9, function* () {
       this.move(1);
@@ -21,7 +21,7 @@ test("repeat", async () => {
     elapsedTicks = stage._tickCount - firstTick;
   });
 
-  dispatchKeyboardEvent(document, "keypress", "Space");
+  dispatchKeyboardEvent(document, "keydown", "Space");
   for (let i = 0; i < 10; i++) {
     stage.tick();
   }
@@ -33,12 +33,12 @@ test("repeat", async () => {
 test("wait", async () => {
   const { stage, sprite } = await getStageAndSprite();
   let elapsedTicks = 0;
-  sprite.whenKeyPressed("space", function* () {
+  sprite.whenKeyPressed("Space", function* () {
     const initialTick = stage._tickCount;
     yield* this.wait(0.001);
     elapsedTicks = stage._tickCount - initialTick;
   });
-  dispatchKeyboardEvent(document, "keypress", "Space");
+  dispatchKeyboardEvent(document, "keydown", "Space");
   for (let i = 0; i < 10; i++) {
     stage.tick();
     await Bun.sleep(1);
