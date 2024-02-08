@@ -22,4 +22,6 @@ test("repeat", async () => {
     stage.tick();
   }
   expect(elapsedTicks).toBe(10);
+  expect(cat.x).toBe(19);
+  expect(cat.y).toBe(0);
 });
