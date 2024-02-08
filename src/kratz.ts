@@ -13,7 +13,7 @@ interface DOMHelpers {
 // This allows us to fake easily fake a subset of the methods in test.
 type RenderingContext = Pick<
   CanvasRenderingContext2D,
-  "drawImage" | "clearRect" | "save" | "translate" | "restore"
+  "drawImage" | "clearRect" | "save" | "translate" | "restore" | "scale"
 >;
 
 export type {
@@ -31,6 +31,8 @@ type KGenerator = Generator<YieldReason, void, void>;
 
 // type ScriptBody = (this: Sprite) => void | KGenerator;
 type ScriptBody = (this: Sprite) => KGenerator;
+
+type RotationStyle = "all around" | "don't rotate" | "left-right";
 
 class Script {
   ready = false;
@@ -170,6 +172,7 @@ export class Sprite {
 
   private _pos = { x: 0, y: 0 };
   private _direction = 90;
+  private _rotationStyle: RotationStyle = "all around";
 
   get x() {
     return this._pos.x;
@@ -233,7 +236,19 @@ export class Sprite {
   }
 
   draw(ctx: RenderingContext) {
-    ctx.drawImage(this.costumes[0].bitmap, this.x, this.y);
+    let xScale = 1;
+    switch (this._rotationStyle) {
+      case "all around":
+        // TODO
+        break;
+      case "left-right":
+        // Normalize the angle to be between -180 and 180.
+        const normAngle = ((this.direction + 180) % 360) - 180;
+        xScale = Math.sign(normAngle);
+        ctx.scale(xScale, 1);
+        if (xScale < 0) ctx.translate(-WIDTH, 0);
+    }
+    ctx.drawImage(this.costumes[0].bitmap, this.x * xScale, -this.y);
   }
 
   // Movement
@@ -275,14 +290,18 @@ export class Sprite {
     this.setY(this.y + val);
   }
 
+  setRotationStyle(style: RotationStyle) {
+    this._rotationStyle = style;
+  }
+
   // Events
 
-  whenKeyPressed(key: string, callback: ScriptBody) {
+  whenKeyPressed(code: string, callback: ScriptBody) {
     const script = new Script(callback);
     this.scripts.add(script);
 
-    window.addEventListener("keypress", (e: KeyboardEvent) => {
-      if (e.code.toLowerCase() === key) {
+    window.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.code === code) {
         script.ready = true;
         e.preventDefault();
       }
@@ -301,6 +320,13 @@ export class Sprite {
 
   *repeat(times: number, callback: ScriptBody): KGenerator {
     for (let i = 0; i < times; i++) {
+      yield* callback.apply(this);
+      yield "endofloop";
+    }
+  }
+
+  *forever(callback: ScriptBody): KGenerator {
+    while (true) {
       yield* callback.apply(this);
       yield "endofloop";
     }

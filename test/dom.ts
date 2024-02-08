@@ -26,6 +26,7 @@ export const domTestHelpers: DOMHelpersForTesting = {
       save: () => {},
       translate: () => {},
       restore: () => {},
+      scale(_x: number, _y: number) {},
     };
   },
   async createImageBitmap(_: HTMLCanvasElement): Promise<ImageBitmap> {
