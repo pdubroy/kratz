@@ -1,6 +1,6 @@
 # kratz
 
-Like [Scratch](https://scratch.mit.edu/), but JavaScript.
+Like [Scratch](https://scratch.mit.edu/), but a JavaScript library.
 
 ## Usage
 
